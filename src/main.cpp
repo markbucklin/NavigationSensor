@@ -43,10 +43,10 @@ void setup() {
   delay(400);
   bool success;
   success = initializeCommunication();
-  if (success) {
-    Serial.println("Communication initialized");
-    Serial.println(fileVersion);
-  }
+  // if (success) {
+  //   Serial.println("Communication initialized");
+  //   Serial.println(fileVersion);
+  // }
   delay(400);
   // printBoardID();
 
