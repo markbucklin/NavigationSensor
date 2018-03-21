@@ -165,18 +165,28 @@ static inline void beginAcquisition() {
     // currentSampleTimestamp = microsSinceAcquisitionStart;
     microsSinceFrameStart = microsSinceAcquisitionStart;
     currentFrameDuration = microsSinceFrameStart;
+
+    // Call begin-data-frame function (sets trigger outputs)
     beginDataFrame();
 
     // Begin IntervalTimer
     captureTimer.begin(captureDisplacement, samplePeriodMicros);
-
-    // Set Trigger-Out-1 to indicate Running
-    fastDigitalWrite(TRIGGER_OUT_1_PIN, TRIGGER_ACTIVE_STATE);
-    fastDigitalWrite(TRIGGER_OUT_2_PIN, TRIGGER_ACTIVE_STATE);
-    fastDigitalWrite(TRIGGER_OUT_3_PIN, TRIGGER_ACTIVE_STATE);
   }
 }
 static inline void beginDataFrame() {
+  // Set Trigger Outputs to Active state
+  fastDigitalWrite(TRIGGER_OUT_1_PIN, TRIGGER_ACTIVE_STATE);
+  static int triggerOut2Cnt = 1;
+  if (--triggerOut2Cnt <= 0) {
+    fastDigitalWrite(TRIGGER_OUT_2_PIN, TRIGGER_ACTIVE_STATE);
+    triggerOut2Cnt = TRIGGER_OUT_2_DIVISOR;
+  }
+  static int triggerOut3Cnt = 1;
+  if (--triggerOut3Cnt <= 0) {
+    fastDigitalWrite(TRIGGER_OUT_3_PIN, TRIGGER_ACTIVE_STATE);
+    triggerOut3Cnt = TRIGGER_OUT_3_DIVISOR;
+  }
+
   // Latch timestamp and designate/allocate current sample
   microsSinceFrameStart -= currentFrameDuration;
   currentFrameTimestamp = microsSinceAcquisitionStart;
@@ -185,11 +195,16 @@ static inline void beginDataFrame() {
 static inline void endDataFrame() {
   // Latch Frame Duration and Send Data
   currentFrameDuration = microsSinceFrameStart;
+
+  fastDigitalWrite(TRIGGER_OUT_1_PIN, !TRIGGER_ACTIVE_STATE);
+  fastDigitalWrite(TRIGGER_OUT_2_PIN, !TRIGGER_ACTIVE_STATE);
+  fastDigitalWrite(TRIGGER_OUT_3_PIN, !TRIGGER_ACTIVE_STATE);
 }
 static inline void endAcquisition() {
   if (isRunning) {
     // End IntervalTimer
     captureTimer.end();
+    endDataFrame();
 
     // Trigger start using class methods in ADNS library
     sensor.left.triggerAcquisitionStop();
@@ -198,11 +213,6 @@ static inline void endAcquisition() {
 
     // Change state
     isRunning = false;
-
-    // UnSet Trigger-Out to indicate Running
-    fastDigitalWrite(TRIGGER_OUT_1_PIN, !TRIGGER_ACTIVE_STATE);
-    fastDigitalWrite(TRIGGER_OUT_2_PIN, !TRIGGER_ACTIVE_STATE);
-    fastDigitalWrite(TRIGGER_OUT_3_PIN, !TRIGGER_ACTIVE_STATE);
   }
 }
 
@@ -210,9 +220,8 @@ static inline void endAcquisition() {
 // TASKS: TRIGGERED_ACQUISITION
 // =============================================================================
 void captureDisplacement() {
-  // Unset Trigger Outputs
-  fastDigitalWrite(TRIGGER_OUT_2_PIN, !TRIGGER_ACTIVE_STATE);
-  fastDigitalWrite(TRIGGER_OUT_3_PIN, !TRIGGER_ACTIVE_STATE);
+  // // Unset Trigger Outputs
+  endDataFrame();
 
   // Initialize container for combined & stamped sample
   sensor_sample_t currentSample;
@@ -237,16 +246,10 @@ void captureDisplacement() {
     sampleCountRemaining--;
   }
 
-  // Reset Trigger Outputs
-  fastDigitalWrite(TRIGGER_OUT_2_PIN, TRIGGER_ACTIVE_STATE);
-  static int triggerOut3Cnt = TRIGGER_OUT_3_DIVISOR;
-  if (--triggerOut3Cnt <= 0) {
-    fastDigitalWrite(TRIGGER_OUT_3_PIN, TRIGGER_ACTIVE_STATE);
-    triggerOut3Cnt = TRIGGER_OUT_3_DIVISOR;
-  }
-
   // Send Data
   sendData();
+
+  beginDataFrame();
 }
 
 // =============================================================================
